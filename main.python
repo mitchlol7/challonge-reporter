@@ -1,0 +1,182 @@
+import challonge
+import time
+# if set to 0 its user input, anything else is testing default
+testing = 0
+
+
+def updateActiveMatches():
+    matches = challonge.matches.index(tournament["id"])
+    activematches = []
+    for tempmatch in matches:
+        # Python likes to return KeyError if there is no value at that key
+        # so I just put some random stuff in the except block to make it happy
+        try:
+            if tempmatch['player1-id'] != None or tempmatch['player2-id'] != None:
+                if tempmatch['winner-id'] == None and tempmatch not in activematches:
+                    activematches.append(tempmatch)
+        except KeyError:
+            donothing = 420
+    return activematches
+
+
+def displayActiveMatches(activematches):
+    for i in range(0, len(activematches)):
+        matchstatus = "Game "
+        tempmatch = activematches[i]
+        if tempmatch['round'] > 0:
+            n = tempmatch['round']
+            roundinfo = "Winners Round "
+        else:
+            n = tempmatch['round']
+            n = abs(n)
+            roundinfo = "Losers Round "
+        if i == 0:
+            roundinfo += str(n)
+            print("")
+            print("---------Current Bracket---------")
+            print("")
+            print(roundinfo)
+        else:
+            prevmatch = activematches[i-1]
+            if(prevmatch['round'] != tempmatch['round']):
+                roundinfo += str(n)
+                print("")
+                print(roundinfo)
+        matchstatus += str(tempmatch['suggested-play-order'])
+        matchstatus += ": "
+        # "Game x: "
+        pid1 = str(tempmatch['player1-id'])
+        pid2 = str(tempmatch['player2-id'])
+        if(pid1 != 'None'):
+            try:
+                matchstatus += str(playerdict[pid1])
+            except KeyError:
+                print("pid1 KeyError")
+        # Somehow print "winner/loser of game"
+        else:
+            if(str(tempmatch['player1-is-prereq-match-loser']) == "True"):
+                matchstatus += "**Loser of game "
+            else:
+                matchstatus += "**Winner of game "
+            try:
+                prereq = str(tempmatch['player1-prereq-match-id'])
+                matchstatus += str(matchdict[prereq])
+                matchstatus += "**"
+            except KeyError:
+                print("If this prints something unholy just happened1")
+        matchstatus += " vs "
+        if(pid2 != 'None'):
+            try:
+                matchstatus += str(playerdict[pid2])
+            except KeyError:
+                print("pid2 KeyError")
+        # See above comment
+        else:
+            if(str(tempmatch['player2-is-prereq-match-loser']) == "True"):
+                matchstatus += "**Loser of game "
+            else:
+                matchstatus += "**Winner of game "
+            try:
+                prereq = str(tempmatch['player2-prereq-match-id'])
+                matchstatus += str(matchdict[prereq])
+                matchstatus += "**"
+            except KeyError:
+                print("If this prints something unholy just happened2")
+
+        print(matchstatus)
+
+
+# parse report in format of name,x-y, where the x is winning score
+def reportScore(report):
+    a, b = report.split(",")
+    # if it looks like a score
+    if "-" in a and "0" in a or "1" in a or "2" in a or "3" in a or "4" in a or "5" in a:
+        playername = b
+        score = a
+    else:
+        playername = a
+        score = b
+    for currmatch in activematches:
+        matchuservalue = checkMatchForUser(playername, currmatch)
+        # Challonge reports scores by updating player #1 first
+        # Get the winners name and adjust score to challonge standards
+        if matchuservalue == 2:
+            score1, score2 = score.split("-")
+            score = score2
+            score += "-"
+            score += score1
+        if matchuservalue > 0:
+            try:
+                progressmsg = "Attempting to update match with report of: "
+                progressmsg += report
+                print(progressmsg)
+                print("")
+                winnerid = reverseplayerdict[playername]
+                #kwparams according to http://api.challonge.com/v1/documents/matches/update
+                challonge.matches.update(tournament= tournament['id'], match_id= currmatch['id'], scores_csv =score, winner_id=winnerid)
+                print("Success")
+                print("")
+            except KeyError:
+                print("The name you entered is invalid")
+        # If score gets posted without valid oppenent
+        elif matchuservalue == -1:
+            if str(currmatch['player1-id']) == reverseplayerdict[playername]:
+                print("Player 2 is invalid")
+            elif str(currmatch['player2-id']) == reverseplayerdict[playername]:
+                print("Player 1 is invalid")
+
+
+def checkMatchForUser(user, match):
+    if str(match['player1-id']) == "None" or str(match['player2-id']) == "None":
+        return -1
+    elif str(match['player1-id']) == reverseplayerdict[user]:
+        return 1
+    elif str(match['player2-id']) == reverseplayerdict[user]:
+        return 2
+    else:
+        return 0
+
+
+activematches = []
+playerdict = {}
+reverseplayerdict = {}
+matchdict = {}
+if testing == 0:
+    username = raw_input('Enter username:')
+    apikey = raw_input('Enter API Key:')
+    tourneyurl = raw_input('Enter tournament URL:')
+    challonge.set_credentials(username, apikey)
+    tournament = challonge.tournaments.show(tourneyurl)
+else:
+    # Replace username and apikey with your 
+    challonge.set_credentials(
+        "username", "apikey")
+    tournament = challonge.tournaments.show("qrtyu")
+# Retrieve the participants for a given tournament.
+participants = challonge.participants.index(tournament["id"])
+# Map participants to dict with format id:name and name:id
+for i in range(0, len(participants)):
+    playerdict.update({str(participants[i]['id']): str(participants[i]['name'])})
+    reverseplayerdict.update({str(participants[i]['name']): str(participants[i]['id'])})
+
+tournament = challonge.tournaments.show(tournament["id"])
+matches = challonge.matches.index(tournament["id"])
+for i in range(0, len(matches)):
+    matchdict.update({str(matches[i]['id']): matches[i]['suggested-play-order']})
+
+if testing == 0:
+    while True:
+        activematches = updateActiveMatches()
+        displayActiveMatches(activematches)
+        userinput = raw_input('Enter a command(h for help): ')
+        if userinput == "h":
+            print("Please enter the results in the format of:")
+            print("NameOfWinningPlayer,score")
+            print("mango,3-2")
+            print("mango wins the set with a score of 3 to 2")
+            time.sleep(6)
+            print("")
+        elif "," in userinput and "-" in userinput:
+            reportScore(userinput)
+        elif userinput == "q":
+            break
