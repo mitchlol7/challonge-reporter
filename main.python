@@ -4,19 +4,91 @@ import time
 testing = 0
 
 
-def updateActiveMatches():
+def fillEmptySetups(setupnumber):
+    setups = []
+    for i in range(0, setupnumber):
+        setups.append({'winner-id': 'defaultmember'})
+    return setups
+
+
+def assignMatchesToSetup(sortedactivematches, setups):
+    for i in range(0, len(setups)):
+        currsetup = setups[i]
+        if str(currsetup['winner-id']) != 'None':
+            if len(sortedactivematches) > 0:
+                nextmatch = sortedactivematches[0]
+                setups[i] = nextmatch
+                sortedactivematches.pop(0)
+                matchtosetupmsg = "Added game "
+                matchtosetupmsg += str(nextmatch['suggested-play-order'])
+                matchtosetupmsg += " to setup "
+                matchtosetupmsg += str(i)
+                print(matchtosetupmsg)
+            else:
+                print("There aren't enough active matches to keep up with the setups")
+    return setups
+
+
+def displaySetups(setups):
+    for i in range(0, len(setups)):
+        if i == 0:
+            print("----------Setup status----------")
+        currsetup = setups[i]
+        setupstatus = "Setup "
+        setupstatus += str(i)
+        setupstatus += ": "
+        if str(currsetup['winner-id']) != "None":
+            setupstatus += "Empty"
+        else:
+            setupstatus += playerdict[str(currsetup['player1-id'])]
+            setupstatus += " vs "
+            setupstatus += playerdict[str(currsetup['player2-id'])]
+            setupstatus += " | "
+            if(currsetup['round']) > 0:
+                setupstatus += "Winners round "
+                rnd = currsetup['round']
+            else:
+                setupstatus += "Losers round "
+                tempround = currsetup['round']
+                rnd = abs(tempround)
+            setupstatus += str(rnd)
+        print(setupstatus)
+
+
+# Populates array of matches with 2 valid players
+def updateActiveMatches(setups):
     matches = challonge.matches.index(tournament["id"])
     activematches = []
     for tempmatch in matches:
-        # Python likes to return KeyError if there is no value at that key
-        # so I just put some random stuff in the except block to make it happy
+    # Python likes to return KeyError if there is no value at that key
+    # so I just put some random stuff in the except block to make it happy
         try:
-            if tempmatch['player1-id'] != None or tempmatch['player2-id'] != None:
-                if tempmatch['winner-id'] == None and tempmatch not in activematches:
+            if tempmatch['player1-id'] != None and tempmatch['player2-id'] != None:
+                if tempmatch['winner-id'] == None and tempmatch not in activematches and tempmatch not in setups:
                     activematches.append(tempmatch)
         except KeyError:
             donothing = 420
     return activematches
+
+
+def sortActiveMatches(activematches):
+    newlist = sorted(activematches, key=lambda k: k['suggested-play-order'])
+    return newlist
+
+
+def updatePendingMatches(activematches):
+    matches = challonge.matches.index(tournament["id"])
+    pendingmatches = []
+    for tempmatch in matches:
+    # Python likes to return KeyError if there is no value at that key
+    # so I just put some random stuff in the except block to make it happy
+        try:
+            if tempmatch['player1-id'] != None and tempmatch['player2-id'] == None or tempmatch['player2-id'] != None and tempmatch['player1-id'] == None:
+                if tempmatch['winner-id'] == None and tempmatch not in activematches:
+                    pendingmatches.append(tempmatch)
+        except KeyError:
+            donothing = 420
+    return pendingmatches
 
 
 def displayActiveMatches(activematches):
@@ -33,11 +105,14 @@ def displayActiveMatches(activematches):
         if i == 0:
             roundinfo += str(n)
             print("")
-            print("---------Current Bracket---------")
+            if str(tempmatch['player1-id']) == 'None' or str(tempmatch['player2-id']) == 'None':
+                print("---------Matches waiting on other matches---------")
+            else:
+                print("---------Matches waiting on setup---------")
             print("")
             print(roundinfo)
         else:
-            prevmatch = activematches[i-1]
+            prevmatch = activematches[i - 1]
             if(prevmatch['round'] != tempmatch['round']):
                 roundinfo += str(n)
                 print("")
@@ -112,8 +187,10 @@ def reportScore(report):
                 print(progressmsg)
                 print("")
                 winnerid = reverseplayerdict[playername]
-                #kwparams according to http://api.challonge.com/v1/documents/matches/update
-                challonge.matches.update(tournament= tournament['id'], match_id= currmatch['id'], scores_csv =score, winner_id=winnerid)
+                # kwparams according to
+                # http://api.challonge.com/v1/documents/matches/update
+                challonge.matches.update(tournament=tournament['id'], match_id=currmatch[
+                                         'id'], scores_csv=score, winner_id=winnerid)
                 print("Success")
                 print("")
             except KeyError:
@@ -138,6 +215,8 @@ def checkMatchForUser(user, match):
 
 
 activematches = []
+pendingmatches = []
+setups = []
 playerdict = {}
 reverseplayerdict = {}
 matchdict = {}
@@ -145,29 +224,44 @@ if testing == 0:
     username = raw_input('Enter username:')
     apikey = raw_input('Enter API Key:')
     tourneyurl = raw_input('Enter tournament URL:')
+    setupstring = raw_input('Enter the number of setups:')
     challonge.set_credentials(username, apikey)
     tournament = challonge.tournaments.show(tourneyurl)
 else:
-    # Replace username and apikey with your 
+    # Replace username and apikey with your
     challonge.set_credentials(
-        "username", "apikey")
+        "mitchlol7", "UhcccVrpVQuZnpNPuoVxPorohzd5DFVq1AKfLcUN")
     tournament = challonge.tournaments.show("qrtyu")
+    setupstring = "5"
 # Retrieve the participants for a given tournament.
+setupnumber = int(setupstring)
 participants = challonge.participants.index(tournament["id"])
 # Map participants to dict with format id:name and name:id
 for i in range(0, len(participants)):
-    playerdict.update({str(participants[i]['id']): str(participants[i]['name'])})
-    reverseplayerdict.update({str(participants[i]['name']): str(participants[i]['id'])})
+    playerdict.update(
+        {str(participants[i]['id']): str(participants[i]['name'])})
+    reverseplayerdict.update(
+        {str(participants[i]['name']): str(participants[i]['id'])})
 
 tournament = challonge.tournaments.show(tournament["id"])
 matches = challonge.matches.index(tournament["id"])
 for i in range(0, len(matches)):
-    matchdict.update({str(matches[i]['id']): matches[i]['suggested-play-order']})
-
+    matchdict.update(
+        {str(matches[i]['id']): matches[i]['suggested-play-order']})
+setups = fillEmptySetups(setupnumber)
+activematches = updateActiveMatches(setups)
+pendingmatches = updatePendingMatches(activematches)
+sortedactivematches = sortActiveMatches(activematches)
+assignMatchesToSetup(sortedactivematches, setups)
+# Mitchell, you better fucking remember to update this shit in the morning
+# Also remove the api key and shit
 if testing == 0:
     while True:
-        activematches = updateActiveMatches()
+        displaySetups(setups)
+        activematches = updateActiveMatches(setups)
+        pendingmatches = updatePendingMatches(activematches)
         displayActiveMatches(activematches)
+        displayActiveMatches(pendingmatches)
         userinput = raw_input('Enter a command(h for help): ')
         if userinput == "h":
             print("Please enter the results in the format of:")
@@ -178,5 +272,8 @@ if testing == 0:
             print("")
         elif "," in userinput and "-" in userinput:
             reportScore(userinput)
+            activematches = updateActiveMatches(setups)
+            sortedactivematches = sortActiveMatches(activematches)
+            assignMatchesToSetup(sortedactivematches, setups)
         elif userinput == "q":
             break
