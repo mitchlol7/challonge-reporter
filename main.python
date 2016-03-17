@@ -253,8 +253,6 @@ activematches = updateActiveMatches(setups)
 pendingmatches = updatePendingMatches(activematches)
 sortedactivematches = sortActiveMatches(activematches)
 assignMatchesToSetup(sortedactivematches, setups)
-# Mitchell, you better fucking remember to update this shit in the morning
-# Also remove the api key and shit
 if testing == 0:
     while True:
         displaySetups(setups)
