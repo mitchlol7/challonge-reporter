@@ -171,7 +171,7 @@ def reportScore(report):
     else:
         playername = a
         score = b
-    for currmatch in activematches:
+    for currmatch in setups:
         matchuservalue = checkMatchForUser(playername, currmatch)
         # Challonge reports scores by updating player #1 first
         # Get the winners name and adjust score to challonge standards
@@ -180,7 +180,8 @@ def reportScore(report):
             score = score2
             score += "-"
             score += score1
-        if matchuservalue > 0:
+        #error code 400 is for an empty setup
+        if matchuservalue > 0 and matchuservalue != 400:
             try:
                 progressmsg = "Attempting to update match with report of: "
                 progressmsg += report
@@ -204,7 +205,9 @@ def reportScore(report):
 
 
 def checkMatchForUser(user, match):
-    if str(match['player1-id']) == "None" or str(match['player2-id']) == "None":
+    if str(match['winner-id']) == 'defaultmember':
+        return 400
+    elif str(match['player1-id']) == "None" or str(match['player2-id']) == "None":
         return -1
     elif str(match['player1-id']) == reverseplayerdict[user]:
         return 1
@@ -230,7 +233,7 @@ if testing == 0:
 else:
     # Replace username and apikey with your
     challonge.set_credentials(
-        "mitchlol7", "UhcccVrpVQuZnpNPuoVxPorohzd5DFVq1AKfLcUN")
+        "mitchlol7", "APIKEY")
     tournament = challonge.tournaments.show("qrtyu")
     setupstring = "5"
 # Retrieve the participants for a given tournament.
@@ -270,6 +273,7 @@ if testing == 0:
             print("")
         elif "," in userinput and "-" in userinput:
             reportScore(userinput)
+            print("")
             activematches = updateActiveMatches(setups)
             sortedactivematches = sortActiveMatches(activematches)
             assignMatchesToSetup(sortedactivematches, setups)
